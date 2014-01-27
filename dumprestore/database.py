@@ -1,10 +1,14 @@
 
 import subprocess
+import logging
+import tempfile
 
 from django.conf import settings
+
 from . import registry
-import tempfile
 from . import backup
+
+logger = logging.getLogger("dumprestore")
 
 class DatabaseBackupException(Exception):
     pass
@@ -37,7 +41,7 @@ class PostgresBackupDriver(DatabaseBackupDriver):
             command.extend(['-p', conf['PORT']])
         if conf['NAME'] is not None:
             command.append(conf['NAME'])
-        print "Executing", " ".join(command)
+        logger.debug("Executing %r" % " ".join(command))
         subprocess.check_call(command, env=environment)
 
 class DatabaseBackupSet(backup.BackupSet):
