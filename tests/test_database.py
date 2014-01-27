@@ -68,17 +68,23 @@ class TestDatabaseBackupSet(TestCase):
      
     def test_setup_no_order(self):
         s = database.DatabaseBackupSet()
-        s.setup()
         self.assertEqual(len(s.databases), 3)
         
     def test_setup_order(self):
         database.settings.DATABASE_BACKUP_ORDER = ['two']
         s = database.DatabaseBackupSet()
-        s.setup()
         self.assertEqual(len(s.databases), 3)
         self.assertEqual(s.databases[0][0], 'two')
         self.assert_('one' in [x[0] for x in s.databases])
         self.assert_('three' in [x[0] for x in s.databases])
         
-        
+    def test_backup(self):
+        ntf = MagicMock()
+        database.tempfile.NamedTemporaryFile = ntf
+        s = database.DatabaseBackupSet()
+        driver = MagicMock()
+        s.databases = [
+            ('one', driver)]
+        s.backup()
+        self.assertEqual(driver.backup.mock_calls, [call(ntf().name, 'one')])
         

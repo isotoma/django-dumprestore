@@ -52,6 +52,7 @@ class DatabaseBackupSet(backup.BackupSet):
         self.destdir = destdir
         self.drivers = []
         self.databases = []
+        self.setup()
 
     def get_driver(self, engine):
         return DatabaseDriverType.drivers.get(engine, None)
@@ -69,17 +70,19 @@ class DatabaseBackupSet(backup.BackupSet):
             self.databases.append((db, driver()))
     
     def preflight(self):
-        self.setup()
         print "Backing up the following databases:"
         for db, driver in self.databases:
             print "    %s (%s)" % (db, driver.__class__.__name__)
             
     def backup(self):
-        f = tempfile.NamedTemporaryFile(dir=self.destdir, delete=False)
-        f.close()
+        files = []
         for db, driver in self.databases:
-            driver.backup(f.name, db)
-            yield ("database/%s.dmp" % db, f.name)
+            f = tempfile.NamedTemporaryFile(dir=self.destdir, delete=False)
+            f.close()
+            filename = f.name
+            driver.backup(filename, db)
+            files.append(("database/%s.dmp" % db, filename))
+        return files
     
     def cleanup(self):
         return []
