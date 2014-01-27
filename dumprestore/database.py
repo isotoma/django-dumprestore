@@ -26,7 +26,7 @@ class PostgresBackupDriver(DatabaseBackupDriver):
     command = ['pg_dump', '-Fc', '-C', '-EUTF-8', '-b', '-o']
     
     def backup(self, filename, db):
-        print "Backing up postgres database", db, "to", filename
+        logger.info("Backing up postgres database %r to %r" % (db, filename))
         conf = settings.DATABASES[db]
         environment = {}
         command = self.command[:]

@@ -3,31 +3,50 @@ from mock import MagicMock, call
 
 from dumprestore import database
 
-database.settings = settings = MagicMock()
-database.subprocess = MagicMock()
-database.subprocess.check_call = check_call = MagicMock()
 
+DATABASES = {
+    'test': {
+        'USER': 'xxuserxx',
+        'PASSWORD': 'xxpasswordxx',
+        'HOST': 'xxhostxx',
+        'PORT': 'xxportxx',
+        'NAME': 'xxnamexx',
+    }
+}
+
+stdargs = ['pg_dump', '-Fc', '-C', '-EUTF-8', '-b', '-o', '-f', '/var/tmp/foo']
+
+ 
 class TestPostgresBackupDriver(TestCase):
     
+    def setUp(self):
+        database.settings = settings = MagicMock()
+        database.subprocess = MagicMock()
+        database.subprocess.check_call = MagicMock()
+    
     def test_backup(self):
-        settings.DATABASES = {
-            'test': {
-                'USER': 'xxuserxx',
-                'PASSWORD': 'xxpasswordxx',
-                'HOST': 'xxhostxx',
-                'PORT': 'xxportxx',
-                'NAME': 'xxnamexx',
-            }
-        }
+        database.settings.DATABASES = DATABASES
         driver = database.PostgresBackupDriver()
         driver.backup("/var/tmp/foo", "test")
-        self.assertEqual(check_call.mock_calls, [
-            call(['pg_dump', '-Fc', '-C', '-EUTF-8', '-b', '-o', 
-                  '-f', '/var/tmp/foo',
+        self.assertEqual(database.subprocess.check_call.mock_calls, [
+            call(stdargs + [
                   '-U', 'xxuserxx',
                   '-h', 'xxhostxx',
                   '-p', 'xxportxx',
-                  'xxnamexx'],
-                 env = {'PGPASSWORD': 'xxpasswordxx'},
-                 )])
+                  'xxnamexx']
+                 , env = {'PGPASSWORD': 'xxpasswordxx'})
+        ])
+        
+    def test_backup_nouser(self):
+        database.settings.DATABASES = DATABASES
+        database.settings.DATABASES['test']['USER'] = None
+        driver = database.PostgresBackupDriver()
+        driver.backup("/var/tmp/foo", "test")
+        self.assertEqual(database.subprocess.check_call.mock_calls, [
+            call(stdargs + [
+                  '-h', 'xxhostxx',
+                  '-p', 'xxportxx',
+                  'xxnamexx'
+                ], env = {'PGPASSWORD': 'xxpasswordxx'})
+        ])
         
