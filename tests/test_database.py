@@ -49,4 +49,36 @@ class TestPostgresBackupDriver(TestCase):
                   'xxnamexx'
                 ], env = {'PGPASSWORD': 'xxpasswordxx'})
         ])
+ 
+class TestDatabaseBackupSet(TestCase):
+    
+    def setUp(self):
+        database.settings = settings = MagicMock()
+        database.settings.DATABASES = {
+            'one': {
+                'ENGINE': 'django.db.backends.postgresql_psycopg2',
+                },
+            'two': {
+                'ENGINE': 'django.db.backends.postgresql_psycopg2',
+                },
+            'three': {
+                'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            }
+        }
+     
+    def test_setup_no_order(self):
+        s = database.DatabaseBackupSet()
+        s.setup()
+        self.assertEqual(len(s.databases), 3)
+        
+    def test_setup_order(self):
+        database.settings.DATABASE_BACKUP_ORDER = ['two']
+        s = database.DatabaseBackupSet()
+        s.setup()
+        self.assertEqual(len(s.databases), 3)
+        self.assertEqual(s.databases[0][0], 'two')
+        self.assert_('one' in [x[0] for x in s.databases])
+        self.assert_('three' in [x[0] for x in s.databases])
+        
+        
         
