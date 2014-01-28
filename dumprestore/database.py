@@ -6,7 +6,7 @@ import tempfile
 from django.conf import settings
 
 from . import registry
-from . import backup
+from .backupset import BackupSet
 
 logger = logging.getLogger("dumprestore")
 
@@ -44,7 +44,7 @@ class PostgresBackupDriver(DatabaseBackupDriver):
         logger.debug("Executing %r" % " ".join(command))
         subprocess.check_call(command, env=environment)
 
-class DatabaseBackupSet(backup.BackupSet):
+class DatabaseBackupSet(BackupSet):
     
     """ Backup Sets form a tree of backup sets, where the children are backed up in order once the parent backup has completed. """
     

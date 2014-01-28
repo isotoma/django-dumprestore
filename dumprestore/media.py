@@ -8,7 +8,7 @@ from django.core.files import storage
 from django.conf import settings
 
 from . import registry
-from . import backup
+from .backupset import BackupSet
 
 logger = logging.getLogger("dumprestore")
 
@@ -46,7 +46,7 @@ class FileBackupDriver(MediaBackupDriver):
         z.close()
         logger.info("%d files written" % count)
 
-class MediaBackupSet(backup.BackupSet):
+class MediaBackupSet(BackupSet):
     
     def __init__(self, destdir="/var/tmp"):
         self.driver = None
