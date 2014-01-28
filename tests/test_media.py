@@ -41,23 +41,43 @@ class TestMediaBackupSet(TestCase):
                          media.FileBackupDriver)
 
     
-    @patch('dumprestore.media.storage.get_storage_class')
-    def test_preflight(self, *mocks):
-        s = media.MediaBackupSet()
+    def _storage(self):
         storage_class = MagicMock()
         storage = storage_class()
         media.storage.get_storage_class.return_value = storage_class
         storage_class.__module__ = "django.core.files.storage"
         storage_class.__name__ = "FileSystemStorage"
+        return storage
+        
+    @patch('dumprestore.media.storage.get_storage_class')
+    def test_preflight(self, *mocks):
+        self._storage()
+        s = media.MediaBackupSet()
         s.preflight()
         self.assertEqual(s.driver.__class__, media.FileBackupDriver)
 
+    @patch('dumprestore.media.storage.get_storage_class')
     @patch('dumprestore.media.tempfile.NamedTemporaryFile')
     def test_backup(self, *mocks):
+        self._storage()
         tmp = media.tempfile.NamedTemporaryFile()
         tmp.name = "xxfooxx"
         s = media.MediaBackupSet()
+        s.preflight()
         s.driver = MagicMock()
         self.assertEqual(s.backup(), [("media.zip", "xxfooxx")])
         self.assertEqual(s.driver.mock_calls, [call.backup("xxfooxx")])
+        
+    @patch('dumprestore.media.storage.get_storage_class')
+    @patch('dumprestore.media.tempfile.NamedTemporaryFile')
+    def test_cleanup(self, *mocks):
+        self._storage()
+        tmp = media.tempfile.NamedTemporaryFile()
+        tmp.name = "xxfooxx"
+        s = media.MediaBackupSet()
+        s.preflight()
+        s.driver = MagicMock()
+        self.assertEqual(s.backup(), [("media.zip", "xxfooxx")])
+        self.assertEqual(s.driver.mock_calls, [call.backup("xxfooxx")])
+        self.assertEqual(s.cleanup(), ["xxfooxx"])
         

@@ -1,15 +1,7 @@
 import os
 import sys
-import itertools
 import zipfile
-import tempfile
-import subprocess
 import logging
-
-from django.conf import settings
-from django.core.files.storage import get_storage_class
-
-from . import registry
 
 logger = logging.getLogger("backup")
 
@@ -45,7 +37,7 @@ class BackupSet:
         """ Produce a list of files to delete once everything has succeeded. """
         files = []
         for c in self.children:
-            files.append(c.cleanup())
+            files.extend(c.cleanup())
         return files
     
 class RootBackupSet(BackupSet):
@@ -65,6 +57,7 @@ class RootBackupSet(BackupSet):
     def cleanup(self):
         files = BackupSet.cleanup(self)
         print "Deleting files", files
-        
+        for f in files:
+            os.unlink(f)
     
     

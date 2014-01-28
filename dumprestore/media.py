@@ -50,6 +50,7 @@ class MediaBackupSet(backup.BackupSet):
     
     def __init__(self, destdir="/var/tmp"):
         self.driver = None
+        self.filename = None
         self.destdir = destdir
         
     def get_driver(self, engine):
@@ -63,15 +64,17 @@ class MediaBackupSet(backup.BackupSet):
             raise MediaBackupException("No driver for engine %r" % engine)
         self.driver = driver()
         logger.info("Backup media with %r" % self.driver.__class__.__name__)
-
-    def backup(self):
         f = tempfile.NamedTemporaryFile(dir=self.destdir, delete=False)
         f.close()
-        logger.info("Writing media to %r" % f.name)
-        self.driver.backup(f.name)
-        return [("media.zip", f.name)]
+        self.filename = f.name
+        logger.debug("Will create temporary file %r" % self.filename)
+
+    def backup(self):
+        logger.info("Writing media to %r" % self.filename)
+        self.driver.backup(self.filename)
+        return [("media.zip", self.filename)]
 
     def cleanup(self):
-        return []
+        return [self.filename]
     
     
