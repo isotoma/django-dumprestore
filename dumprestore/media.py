@@ -3,6 +3,7 @@ import os
 import zipfile
 import tempfile
 import logging
+import json
 
 from django.core.files import storage
 from django.conf import settings
@@ -22,29 +23,71 @@ class MediaBackupDriver(object):
     __metaclass__ = MediaDriverType
     engine = None
 
+class FileMetadata:
+    
+    """ We store all the metadata we've got, just in case. """
+    
+    datums = ['accessed_time', 'created_time', 'modified_time', 'size']
+    
+    def __init__(self, storage):
+        self.storage = storage
+        
+    def _json(self, obj):
+        if hasattr(obj, 'isoformat'):
+            return obj.isoformat()
+        raise TypeError
+    
+    def to_json(self, arcname):
+        d = {}
+        for m in self.datums:
+            d[m] = getattr(self.storage, m)(arcname)
+        return json.dumps(d, default=self._json)
+    
+    def has_changed(self, arcname, metadata):
+        """ Returns True if the file has changed since it was stored. """
+        modified = self.storage.modified_time(arcname)
+        size = self.storage.size(arcname)
+        d = json.loads(metadata)
+        if modified != d['modified_time'] or size != d['size']:
+            return True
+        return False
+        
 class FileBackupDriver(MediaBackupDriver):
     """ Implements backups of the default FileSystemStorage """
     engine = 'django.core.files.storage.FileSystemStorage'
     
-    def backup(self, filename):
-        st = storage.get_storage_class()()
-        z = zipfile.ZipFile(filename, mode="w", allowZip64=True)
+    def storage_files(self, storage):
         directories = ["."]
         files = []
-        root = settings.MEDIA_ROOT
-        count = 0
         while directories:
             d = directories.pop()
-            new_dirs, files = st.listdir(d)
+            new_dirs, files = storage.listdir(d)
             for nd in new_dirs:
                 directories.append(os.path.join(d, nd))
             for f in files:
                 arcname = os.path.join(d, f).lstrip("./")
-                source = os.path.join(root, arcname)
-                z.write(source, arcname)
-                count = count + 1
+                yield arcname
+    
+    def backup(self, filename):
+        st = storage.get_storage_class()()
+        z = zipfile.ZipFile(filename, mode="w", allowZip64=True)
+        count = 0
+        meta = FileMetadata(st)
+        for arcname in self.storage_files(st):
+            f = st.open(arcname)
+            z.writestr("media/%s" % arcname, f.read())
+            z.writestr("meta/%s" % arcname, meta.to_json(arcname))
+            f.close()
+            count = count + 1
         z.close()
         logger.info("%d files written" % count)
+        
+    def restore(self, filename):
+        st = storage.get_storage_class()()
+        z = zipfile.ZipFile(filename, mode="r", allowZip64=True)
+        
+        
+        
 
 class MediaBackupSet(BackupSet):
     

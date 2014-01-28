@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand, CommandError
-from dumprestore.backup import RootBackupSet
+from dumprestore.backupset import RootBackupSet
 from dumprestore.database import DatabaseBackupSet
 from dumprestore.media import MediaBackupSet
 
