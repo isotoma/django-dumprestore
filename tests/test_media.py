@@ -90,4 +90,9 @@ class TestMediaBackupSet(TestCase):
         self.assertEqual(s.backup(), [("media.zip", "xxfooxx")])
         self.assertEqual(s.driver.mock_calls, [call.backup("xxfooxx")])
         self.assertEqual(s.cleanup(), ["xxfooxx"])
+    
+    def test_restore(self, *mocks):
+        storage = self._storage()
+        s = media.MediaBackupSet()
+        s.preflight()
         

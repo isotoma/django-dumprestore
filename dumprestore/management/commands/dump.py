@@ -1,7 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
-from dumprestore.backupset import RootBackupSet
-from dumprestore.database import DatabaseBackupSet
-from dumprestore.media import MediaBackupSet
+from dumprestore.backupset import Archive
+from dumprestore.default import default_set
 
 class Command(BaseCommand):
     args = '<filename>'
@@ -10,10 +9,10 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if len(args) != 1:
             raise CommandError("Usage: backup <filename>")
-        s = RootBackupSet(args[0])
-        MediaBackupSet().setSetParent(s)
-        DatabaseBackupSet().setSetParent(s)
-        s.preflight()
-        s.backup()
-        s.cleanup()
+        s = default_set()
+        s.archive = Archive(args[0], "w")
+        if not s.before_dump():
+            raise SystemExit()
+        s.dump()
+        s.after_dump()
     

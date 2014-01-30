@@ -5,119 +5,119 @@ import tempfile
 import logging
 import json
 
-from django.core.files import storage
+from django.core.files import storage as files_storage
 from django.conf import settings
 
 from . import registry
-from .backupset import BackupSet
+from .backupset import BackupDriver
 
 logger = logging.getLogger("dumprestore")
 
 class MediaBackupException(Exception):
     pass
 
-class MediaDriverType(registry.DriverRegistry):
+class MediaRestoreException(Exception):
     pass
 
-class MediaBackupDriver(object):
-    __metaclass__ = MediaDriverType
-    engine = None
-
 class FileMetadata:
-    
+
     """ We store all the metadata we've got, just in case. """
-    
+
     datums = ['accessed_time', 'created_time', 'modified_time', 'size']
-    
+
     def __init__(self, storage):
         self.storage = storage
-        
+
     def _json(self, obj):
         if hasattr(obj, 'isoformat'):
             return obj.isoformat()
         raise TypeError
-    
+
     def to_json(self, arcname):
         d = {}
         for m in self.datums:
             d[m] = getattr(self.storage, m)(arcname)
         return json.dumps(d, default=self._json)
-    
+
     def has_changed(self, arcname, metadata):
         """ Returns True if the file has changed since it was stored. """
-        modified = self.storage.modified_time(arcname)
+        modified = self.storage.modified_time(arcname).isoformat()
         size = self.storage.size(arcname)
         d = json.loads(metadata)
-        if modified != d['modified_time'] or size != d['size']:
+        if modified < d['modified_time'] or size != d['size']:
             return True
         return False
-        
-class FileBackupDriver(MediaBackupDriver):
-    """ Implements backups of the default FileSystemStorage """
-    engine = 'django.core.files.storage.FileSystemStorage'
-    
-    def storage_files(self, storage):
+
+class MediaDriver(BackupDriver):
+
+    def __init__(self, tempdir="/var/tmp", storage=None):
+        self.tempdir = tempdir
+        self.storage = storage
+        if self.storage is None:
+            self.storage = files_storage.get_storage_class()()
+
+    def before_dump(self, archive):
+        f = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False)
+        f.close()
+        self.filename = f.name
+        logger.debug("Will create temporary file %r" % self.filename)
+
+    def storage_files(self):
         directories = ["."]
-        files = []
         while directories:
             d = directories.pop()
-            new_dirs, files = storage.listdir(d)
+            new_dirs, files = self.storage.listdir(d)
             for nd in new_dirs:
                 directories.append(os.path.join(d, nd))
             for f in files:
                 arcname = os.path.join(d, f).lstrip("./")
                 yield arcname
-    
-    def backup(self, filename):
-        st = storage.get_storage_class()()
-        z = zipfile.ZipFile(filename, mode="w", allowZip64=True)
+
+    def dump(self, prefix, archive):
         count = 0
-        meta = FileMetadata(st)
-        for arcname in self.storage_files(st):
-            f = st.open(arcname)
-            z.writestr("media/%s" % arcname, f.read())
-            z.writestr("meta/%s" % arcname, meta.to_json(arcname))
-            f.close()
+        for arcname in self.storage_files():
+            with self.storage.open(arcname) as f:
+                archive.writestr("%s/data/%s" % (prefix, arcname), f.read())
+            archive.writestr("%s/meta/%s" % (prefix, arcname), meta.to_json(arcname))
             count = count + 1
-        z.close()
         logger.info("%d files written" % count)
-        
-    def restore(self, filename):
-        st = storage.get_storage_class()()
-        z = zipfile.ZipFile(filename, mode="r", allowZip64=True)
-        
-        
-        
 
-class MediaBackupSet(BackupSet):
+    def replace_file(self, prefix, name, archive):
+        replace = False
+        meta = FileMetadata(self.storage)
+        if self.storage.exists(name):
+            metadata = archive.open("%s/meta/%s" % (prefix, name)).read()
+            if meta.has_changed(name, metadata):
+                logging.debug("Metadata changed for %r" % name)
+                replace = True
+            else:
+                replace = False
+        else:
+            logging.debug("File does not exist %r" % name)
+            replace = True
+        return replace
     
-    def __init__(self, destdir="/var/tmp"):
-        self.driver = None
-        self.filename = None
-        self.destdir = destdir
-        
-    def get_driver(self, engine):
-        return MediaDriverType.drivers.get(engine, None)
-        
-    def preflight(self):
-        cls = storage.get_storage_class()
-        fqcn = cls.__module__ + "." + cls.__name__
-        driver = self.get_driver(fqcn)
-        if driver is None:
-            raise MediaBackupException("No driver for engine %r" % engine)
-        self.driver = driver()
-        logger.info("Backup media with %r" % self.driver.__class__.__name__)
-        f = tempfile.NamedTemporaryFile(dir=self.destdir, delete=False)
-        f.close()
-        self.filename = f.name
-        logger.debug("Will create temporary file %r" % self.filename)
+    def restore(self, prefix, archive, force=False):
+        names = set(self.filenames(prefix, archive))
+        storage_only = list(self.storage_only(names))
+        if storage_only and not force:
+            raise MediaRestoreException("Files present in storage that are not in the backup", storage_only)
+        meta = FileMetadata(self.storage)
+        for n in names:
+            if self.replace_file(prefix, n, archive):
+                logging.info("Writing %r" % n)
+                data = archive.open("%s/data/%s" % (prefix, n)).read()
+                self.storage.open(n, "w").write(data)
 
-    def backup(self):
-        logger.info("Writing media to %r" % self.filename)
-        self.driver.backup(self.filename)
-        return [("media.zip", self.filename)]
+    def storage_only(self, names):
+        """ find files that are only present in the storage """
+        for f in self.storage_files():
+            if f not in names:
+                yield f
 
-    def cleanup(self):
-        return [self.filename]
-    
-    
+    def filenames(self, prefix, archive):
+        """ Return the list of filenames in our zip. This knows that the files are in a media directory. """
+        dataprefix = "%s/data/" % prefix
+        for n in archive.namelist():
+            if n.startswith(dataprefix):
+                yield n[len(dataprefix):]
