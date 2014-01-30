@@ -9,18 +9,48 @@ class Archive:
     
     """ Represents an archive to backup to or restore from.  Just acts as a proxy for zipfile.ZipFile right now. """
     
-    def __init__(self, filename, mode="r"):
-        self.zipfile = zipfile.ZipFile(filename, mode, allowZip64=True)
+    def __init__(self, zipfile, prefix=""):
+        self.prefix = prefix
+        self.zipfile = zipfile
         
-    def __getattr__(self, name):
-        return getattr(self.zipfile, name)
+    @classmethod
+    def new(klass, filename, mode):
+        return klass(zipfile.ZipFile(filename, mode, allowZip64=True))
+    
+    def subarchive(self, prefix):
+        if self.prefix:
+            newprefix = self.prefix + "/" + prefix
+        else:
+            newprefix = prefix
+        return self.__class__(self.zipfile, newprefix)
+    
+    def _name(self, name):
+        if self.prefix == "":
+            return name
+        else:
+            return self.prefix + "/" + name
+    
+    def writestr(self, name, data):
+        self.zipfile.writestr(self._name(name), data)
+        
+    def write(self, filename, arcname):
+        self.writestr(arcname, open(filename).read())
+        
+    def namelist(self):
+        for n in self.zipfile.namelist():
+            if n.startswith(self.prefix):
+                yield n[len(self.prefix)+1:]
+                
+    def open(self, name, *a, **kw):
+        return self.zipfile.open(self._name(name), *a, **kw)
+            
         
 class BackupDriver:
     
     def before_dump(self, archive):
         """ Check that everything is ok to back up to the specified archive. """
         
-    def dump(self, prefix, archive):
+    def dump(self, archive):
         """ Perform the dump to the archive. """
         
     def after_dump(self, archive):
@@ -29,7 +59,7 @@ class BackupDriver:
     def before_restore(self, archive):
         """ Check that everything is ok before a restore """
         
-    def restore(self, prefix, archive):
+    def restore(self, archive):
         """ Perform the restore """
         
     def after_restore(self, archive):
@@ -52,7 +82,7 @@ class BackupSet:
         
     def _get_archive(self):
         if self.__archive is None:
-            return self.parent.archive
+            return self.parent.archive.subarchive(self.name)
         else:
             return self.__archive
         
@@ -61,17 +91,6 @@ class BackupSet:
         
     archive = property(_get_archive, _set_archive)
         
-    def prefix(self):
-        assert(not (self.name is None and self.parent is not None))
-        if self.name is None:
-            prefix = ""
-        elif self.parent is not None:
-            prefix = self.parent.prefix() + "/" + self.name
-            prefix = prefix.lstrip("/")
-        else:
-            prefix = self.name
-        return prefix
-    
     def before_dump(self):
         """ Perform pre-flight checks. Return True if they passed, or False if they failed. """
         checks = []
@@ -86,7 +105,7 @@ class BackupSet:
         for c in self.children:
             c.dump()
         if self.driver is not None:
-            self.driver.dump(self.prefix(), self.archive)
+            self.driver.dump(self.archive)
     
     def after_dump(self):
         """ Perform cleanup operations """
@@ -108,7 +127,7 @@ class BackupSet:
         for c in self.children:
             c.restore()
         if self.driver is not None:
-            self.driver.restore(self.prefix(), self.archive)
+            self.driver.restore(self.archive)
     
     def after_restore(self):
         """ Perform cleanup operations """

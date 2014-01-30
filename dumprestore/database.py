@@ -62,7 +62,7 @@ class DatabaseDriver(BackupDriver):
         for db, driver in self.databases:
             print "    %s (%s)" % (db, driver.__class__.__name__)
 
-    def dump(self, prefix, archive):
+    def dump(self, archive):
         for db, driver in self.databases:
             logger.info("Backing up database %r" % db)
             f = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False)
@@ -70,9 +70,9 @@ class DatabaseDriver(BackupDriver):
             filename = f.name
             logger.debug("Writing to temporary file %r" % filename)
             driver.backup(filename, db)
-            archive.write(filename, "%s/%s.dmp" % (prefix, db))
+            archive.write(filename, "%s.dmp" % (db,))
             logger.debug("Removing temporary file %r" % filename)
             os.unlink(filename)
 
-    def restore(self, prefix, archive):
+    def restore(self, archive):
         pass

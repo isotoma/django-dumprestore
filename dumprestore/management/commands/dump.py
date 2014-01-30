@@ -10,7 +10,7 @@ class Command(BaseCommand):
         if len(args) != 1:
             raise CommandError("Usage: backup <filename>")
         s = default_set()
-        s.archive = Archive(args[0], "w")
+        s.archive = Archive.new(args[0], "w")
         if not s.before_dump():
             raise SystemExit()
         s.dump()

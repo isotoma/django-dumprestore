@@ -73,20 +73,21 @@ class MediaDriver(BackupDriver):
                 arcname = os.path.join(d, f).lstrip("./")
                 yield arcname
 
-    def dump(self, prefix, archive):
+    def dump(self, archive):
         count = 0
+        meta = FileMetadata(self.storage)
         for arcname in self.storage_files():
             with self.storage.open(arcname) as f:
-                archive.writestr("%s/data/%s" % (prefix, arcname), f.read())
-            archive.writestr("%s/meta/%s" % (prefix, arcname), meta.to_json(arcname))
+                archive.writestr("data/%s" % (arcname,), f.read())
+            archive.writestr("meta/%s" % (arcname,), meta.to_json(arcname))
             count = count + 1
         logger.info("%d files written" % count)
 
-    def replace_file(self, prefix, name, archive):
+    def replace_file(self, name, archive):
         replace = False
         meta = FileMetadata(self.storage)
         if self.storage.exists(name):
-            metadata = archive.open("%s/meta/%s" % (prefix, name)).read()
+            metadata = archive.open("meta/%s" % (name,)).read()
             if meta.has_changed(name, metadata):
                 logging.debug("Metadata changed for %r" % name)
                 replace = True
@@ -97,16 +98,16 @@ class MediaDriver(BackupDriver):
             replace = True
         return replace
     
-    def restore(self, prefix, archive, force=False):
-        names = set(self.filenames(prefix, archive))
+    def restore(self, archive, force=False):
+        names = set(self.filenames(archive))
         storage_only = list(self.storage_only(names))
         if storage_only and not force:
             raise MediaRestoreException("Files present in storage that are not in the backup", storage_only)
         meta = FileMetadata(self.storage)
         for n in names:
-            if self.replace_file(prefix, n, archive):
+            if self.replace_file(n, archive):
                 logging.info("Writing %r" % n)
-                data = archive.open("%s/data/%s" % (prefix, n)).read()
+                data = archive.open("data/%s" % (n,)).read()
                 self.storage.open(n, "w").write(data)
 
     def storage_only(self, names):
@@ -115,9 +116,8 @@ class MediaDriver(BackupDriver):
             if f not in names:
                 yield f
 
-    def filenames(self, prefix, archive):
+    def filenames(self, archive):
         """ Return the list of filenames in our zip. This knows that the files are in a media directory. """
-        dataprefix = "%s/data/" % prefix
         for n in archive.namelist():
-            if n.startswith(dataprefix):
-                yield n[len(dataprefix):]
+            if n.startswith("data/"):
+                yield n[len("data/"):]
