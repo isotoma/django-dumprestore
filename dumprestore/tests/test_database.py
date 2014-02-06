@@ -24,9 +24,9 @@ class TestPostgres(TestCase):
 
     @patch("dumprestore.database.subprocess")
     @patch("dumprestore.database.settings")
-    def test_backup(self, settings, subprocess):
+    def test_dump(self, settings, subprocess):
         settings.DATABASES = DATABASES
-        self.driver.backup("/var/tmp/foo", "test")
+        self.driver.dump("/var/tmp/foo", "test")
         self.assertEqual(subprocess.check_call.mock_calls, [
             call(stdargs + [
                   '-U', 'xxuserxx',
@@ -38,10 +38,10 @@ class TestPostgres(TestCase):
 
     @patch("dumprestore.database.subprocess")
     @patch("dumprestore.database.settings")
-    def test_backup_nouser(self, settings, subprocess):
+    def test_dump_nouser(self, settings, subprocess):
         settings.DATABASES = DATABASES.copy()
         settings.DATABASES['test']['USER'] = None
-        self.driver.backup("/var/tmp/foo", "test")
+        self.driver.dump("/var/tmp/foo", "test")
         self.assertEqual(subprocess.check_call.mock_calls, [
             call(stdargs + [
                   '-h', 'xxhostxx',
@@ -50,11 +50,12 @@ class TestPostgres(TestCase):
                 ], env = {'PGPASSWORD': 'xxpasswordxx'})
         ])
 
-class TestDatabaseBackupSet(TestCase):
+class TestDatabaseDriver(TestCase):
 
     def setUp(self):
-        database.settings = settings = MagicMock()
-        database.settings.DATABASES = {
+        self.p = patch("dumprestore.database.settings")
+        self.settings = self.p.start()
+        self.settings.DATABASES = {
             'one': {
                 'ENGINE': 'django.db.backends.postgresql_psycopg2',
                 },
@@ -65,25 +66,27 @@ class TestDatabaseBackupSet(TestCase):
                 'ENGINE': 'django.db.backends.postgresql_psycopg2',
             }
         }
+        self.driver = database.DatabaseDriver()
+        self.archive = MagicMock()
 
-    def test_setup_no_order(self):
-        s = database.DatabaseBackupSet()
-        self.assertEqual(len(s.databases), 3)
+    def tearDown(self):
+        self.p.stop()
 
-    def test_setup_order(self):
-        database.settings.DATABASE_BACKUP_ORDER = ['two']
-        s = database.DatabaseBackupSet()
-        self.assertEqual(len(s.databases), 3)
-        self.assertEqual(s.databases[0][0], 'two')
-        self.assert_('one' in [x[0] for x in s.databases])
-        self.assert_('three' in [x[0] for x in s.databases])
+    def test_get_databases_no_order(self):
+        self.assertEqual(len(list(self.driver.get_databases())), 3)
 
-    def test_backup(self):
-        ntf = MagicMock()
-        database.tempfile.NamedTemporaryFile = ntf
-        s = database.DatabaseBackupSet()
-        driver = MagicMock()
-        s.databases = [
-            ('one', driver)]
-        s.backup()
-        self.assertEqual(driver.backup.mock_calls, [call(ntf().name, 'one')])
+    def test_get_databases_ordered(self):
+        self.settings.DATABASE_BACKUP_ORDER = ['two']
+        databases = list(self.driver.get_databases())
+        self.assertEqual(len(databases), 3)
+        self.assertEqual(databases[0][0], 'two')
+        self.assert_('one' in [x[0] for x in databases])
+        self.assert_('three' in [x[0] for x in databases])
+
+    @patch("tempfile.NamedTemporaryFile")
+    @patch("dumprestore.database.os")
+    def test_dump(self, os, ntf):
+        d = MagicMock()
+        self.driver.databases = [("one", d)]
+        self.driver.dump(self.archive)
+        self.assertEqual(d.dump.mock_calls, [call(ntf().name, 'one')])

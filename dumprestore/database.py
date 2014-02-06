@@ -17,10 +17,10 @@ class DatabaseBackupException(Exception):
 databases = {}
 
 class Postgres:
-    
+
     backup_command = ['pg_dump', '-Fc', '-C', '-EUTF-8', '-b', '-o']
 
-    def backup(self, filename, db):
+    def dump(self, filename, db):
         logger.info("Backing up postgres database %r to %r" % (db, filename))
         conf = settings.DATABASES[db]
         environment = {}
@@ -38,14 +38,15 @@ class Postgres:
             command.append(conf['NAME'])
         logger.debug("Executing %r" % " ".join(command))
         subprocess.check_call(command, env=environment)
-        
+
 databases['django.db.backends.postgresql_psycopg2'] = Postgres
-    
+
 class DatabaseDriver(BackupDriver):
 
     def __init__(self, tempdir="/var/tmp"):
         self.tempdir = tempdir
-        self.databases = []
+
+    def get_databases(self):
         order = getattr(settings, 'DATABASE_BACKUP_ORDER', ())
         remaining = settings.DATABASES.keys()
         for o in order:
@@ -55,21 +56,28 @@ class DatabaseDriver(BackupDriver):
             driver = databases.get(engine, None)
             if driver is None:
                 raise DatabaseBackupException("No driver for engine %r" % engine)
-            self.databases.append((db, driver()))
+            yield db, driver()
 
-    def preflight(self):
-        print "Backing up the following databases:"
+    def before_dump(self):
+        self.databases = list(self.get_databases())
+        log.info("Dumping the following databases:")
         for db, driver in self.databases:
-            print "    %s (%s)" % (db, driver.__class__.__name__)
+            log.info("    %s (%s)" % (db, driver.__class__.__name__))
+
+    def before_restore(self):
+        self.databases = list(self.get_databases())
+        log.info("Restoring to the following databases:")
+        for db, driver in self.databases:
+            log.info("    %s (%s)" % (db, driver.__class__.__name__))
 
     def dump(self, archive):
         for db, driver in self.databases:
-            logger.info("Backing up database %r" % db)
+            logger.info("Dumping database %r" % db)
             f = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False)
-            f.close()
             filename = f.name
+            f.close()
             logger.debug("Writing to temporary file %r" % filename)
-            driver.backup(filename, db)
+            driver.dump(filename, db)
             archive.write(filename, "%s.dmp" % (db,))
             logger.debug("Removing temporary file %r" % filename)
             os.unlink(filename)
