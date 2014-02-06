@@ -49,6 +49,8 @@ class FileMetadata:
         return False
 
 class MediaDriver(BackupDriver):
+    
+    """ Knows how to back up from the storage interface. """
 
     def __init__(self, tempdir="/var/tmp", storage=None):
         self.tempdir = tempdir
@@ -56,16 +58,11 @@ class MediaDriver(BackupDriver):
         if self.storage is None:
             self.storage = files_storage.get_storage_class()()
 
-    def before_dump(self, archive):
-        f = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False)
-        f.close()
-        self.filename = f.name
-        logger.debug("Will create temporary file %r" % self.filename)
-
     def storage_files(self):
+        """ Return a generator of all files in the storage, by walking storage.listdir """
         directories = ["."]
         while directories:
-            d = directories.pop()
+            d = directories.pop(0)
             new_dirs, files = self.storage.listdir(d)
             for nd in new_dirs:
                 directories.append(os.path.join(d, nd))
@@ -73,17 +70,9 @@ class MediaDriver(BackupDriver):
                 arcname = os.path.join(d, f).lstrip("./")
                 yield arcname
 
-    def dump(self, archive):
-        count = 0
-        meta = FileMetadata(self.storage)
-        for arcname in self.storage_files():
-            with self.storage.open(arcname) as f:
-                archive.writestr("data/%s" % (arcname,), f.read())
-            archive.writestr("meta/%s" % (arcname,), meta.to_json(arcname))
-            count = count + 1
-        logger.info("%d files written" % count)
-
     def replace_file(self, name, archive):
+        """ returns True if a file in the storage is different from the one
+        in the archive, by testing the dates and size. """
         replace = False
         meta = FileMetadata(self.storage)
         if self.storage.exists(name):
@@ -97,7 +86,24 @@ class MediaDriver(BackupDriver):
             logging.debug("File does not exist %r" % name)
             replace = True
         return replace
-    
+
+    def before_dump(self, archive):
+        """ Called on all drivers before dumping. """
+        f = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False)
+        f.close()
+        self.filename = f.name
+        logger.debug("Will create temporary file %r" % self.filename)
+        
+    def dump(self, archive):
+        count = 0
+        meta = FileMetadata(self.storage)
+        for arcname in self.storage_files():
+            with self.storage.open(arcname) as f:
+                archive.writestr("data/%s" % (arcname,), f.read())
+            archive.writestr("meta/%s" % (arcname,), meta.to_json(arcname))
+            count = count + 1
+        logger.info("%d files written" % count)
+
     def restore(self, archive, force=False):
         names = set(self.filenames(archive))
         storage_only = list(self.storage_only(names))
