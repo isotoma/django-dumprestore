@@ -49,7 +49,7 @@ class FileMetadata:
         return False
 
 class MediaDriver(BackupDriver):
-    
+
     """ Knows how to back up from the storage interface. """
 
     def __init__(self, tempdir="/var/tmp", storage=None):
@@ -87,13 +87,25 @@ class MediaDriver(BackupDriver):
             replace = True
         return replace
 
+    def storage_only(self, names):
+        """ find files that are only present in the storage """
+        for f in self.storage_files():
+            if f not in names:
+                yield f
+
+    def filenames(self, archive):
+        """ Return the list of filenames in our zip. This knows that the files are in a media directory. """
+        for n in archive.namelist():
+            if n.startswith("data/"):
+                yield n[len("data/"):]
+
     def before_dump(self, archive):
         """ Called on all drivers before dumping. """
         f = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False)
         f.close()
         self.filename = f.name
         logger.debug("Will create temporary file %r" % self.filename)
-        
+
     def dump(self, archive):
         count = 0
         meta = FileMetadata(self.storage)
@@ -115,15 +127,3 @@ class MediaDriver(BackupDriver):
                 logging.info("Writing %r" % n)
                 data = archive.open("data/%s" % (n,)).read()
                 self.storage.open(n, "w").write(data)
-
-    def storage_only(self, names):
-        """ find files that are only present in the storage """
-        for f in self.storage_files():
-            if f not in names:
-                yield f
-
-    def filenames(self, archive):
-        """ Return the list of filenames in our zip. This knows that the files are in a media directory. """
-        for n in archive.namelist():
-            if n.startswith("data/"):
-                yield n[len("data/"):]
