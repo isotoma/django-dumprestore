@@ -58,11 +58,11 @@ class DatabaseDriver(BackupDriver):
                 raise DatabaseBackupException("No driver for engine %r" % engine)
             yield db, driver()
 
-    def before_dump(self):
+    def before_dump(self, archive):
         self.databases = list(self.get_databases())
-        log.info("Dumping the following databases:")
+        logger.info("Dumping the following databases:")
         for db, driver in self.databases:
-            log.info("    %s (%s)" % (db, driver.__class__.__name__))
+            logger.info("    %s (%s)" % (db, driver.__class__.__name__))
 
     def before_restore(self):
         self.databases = list(self.get_databases())

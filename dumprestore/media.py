@@ -107,6 +107,7 @@ class MediaDriver(BackupDriver):
         logger.debug("Will create temporary file %r" % self.filename)
 
     def dump(self, archive):
+        logger.info("Dumping media")
         count = 0
         meta = FileMetadata(self.storage)
         for arcname in self.storage_files():
