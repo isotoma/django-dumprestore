@@ -74,6 +74,17 @@ Here's how you could approach a release using django-dumprestore:
 Step 9 ensures that data is restored in a coherent manner, and will restore the
 media too, even if it is in a remote location such as S3.
 
+Parallelising restoration
+=========================
+
+Some database restore commands support parallel loading. You can activate this
+with the switch::
+
+    django restore --db-parallel=<n>
+
+We suggest using the number of cores on the computer as a guide for the number
+of parallel restore processes.
+
 Defining your own backup sets
 =============================
 
