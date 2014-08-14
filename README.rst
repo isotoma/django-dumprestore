@@ -2,6 +2,10 @@
 django-dumprestore
 ==================
 
+TL;DR Adds django management commands to reliably back up and restore your
+project's database and media, no matter which database or media backends are
+used.
+
 When used properly, it ensures mutable state is dumped coherently - i.e. that
 when restored there are no dangling links. Obviously you need to understand what
 coherent means, which will vary from application to application.
