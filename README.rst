@@ -56,20 +56,20 @@ you should always ensure you anonymize data in pre-production environments remem
 
 Here's how you could approach a release using django-dumprestore:
 
-  1. Back up your code (for example sudo tar -cjf backup/foo.YYYY-MM-DD.code.tar.bz2 foo)
-  2. Back up your data (for example foo/bin/django dump backup/foo.YYYY-MM-DD.data.zip)
-  3. Perform the software release
-  4. Discover it failed. Decide to roll back
-  5. Stop all of the associated processes - web, celery, etc.
-  6. Move the existing code directory out of the way (for example mv foo foo.failed.YYYY-MM-DD)
-  7. Perhaps take a dump of the database in it's failed state if you want (with pg_dump etc.)
-  8. Restore the code directory (sudo tar -jxf backup/foo.YYYY-MM-DD.code.tar.bz2)
-  9. Use psql -l to check the databases and their ownership
-  9. Drop the affected databases and recreate with correct owners
-  9. Restore the data (foo/bin/django restore backup/foo.YYYY-MM-DD.data.zip)
- 10. Restart the associated service processes (web, celery etc.)
- 11. Check that everything is working
- 12. Tidy up (logfiles, other remains of broken deployment, refer back to developers)
+ 1. Back up your code (for example sudo tar -cjf backup/foo.YYYY-MM-DD.code.tar.bz2 foo)
+ 2. Back up your data (for example foo/bin/django dump backup/foo.YYYY-MM-DD.data.zip)
+ 3. Perform the software release
+ 4. Discover it failed. Decide to roll back
+ 5. Stop all of the associated processes - web, celery, etc.
+ 6. Move the existing code directory out of the way (for example mv foo foo.failed.YYYY-MM-DD)
+ 7. Perhaps take a dump of the database in it's failed state if you want (with pg_dump etc.)
+ 8. Restore the code directory (sudo tar -jxf backup/foo.YYYY-MM-DD.code.tar.bz2)
+ 9. Use psql -l to check the databases and their ownership
+ 10. Drop the affected databases and recreate with correct owners
+ 11. Restore the data (foo/bin/django restore backup/foo.YYYY-MM-DD.data.zip)
+ 12. Restart the associated service processes (web, celery etc.)
+ 13. Check that everything is working
+ 14. Tidy up (logfiles, other remains of broken deployment, refer back to developers)
 
 Step 9 ensures that data is restored in a coherent manner, and will restore the
 media too, even if it is in a remote location such as S3.
